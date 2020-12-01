@@ -1,0 +1,75 @@
+	Sysctrl_ClkSourceEnable(SysctrlClkXTL, TRUE); //使能外部XTL时钟作为RTC时钟  
+	App_Rch4MHzToPll48MHz ();//App_ClkInit();//	App_ClockCfg();
+	App_GpioCfg1();//配置LED和按键
+	App_RtcCfg();
+	App_Pll48MHzToRch4MHz();//PLL切换到RCH 4M
+	App_LowPowerModeGpioSet();
+    Gpio_EnableIrq(STK_USER_PORT, STK_USER_PIN, GpioIrqFalling);
+    EnableNvic(STK_USER_IRQn, IrqLevel3, TRUE);
+	Lpm_GotoDeepSleep(TRUE); //进入低功耗模式
+	///__WFI();
+	while (1)
+    {;    }
+
+
+void App_Pll48MHzToRch4MHz(void)//时钟进入低功耗默认配置
+{
+	stc_sysctrl_clk_cfg_t stcCfg;
+	stc_sysctrl_pll_cfg_t     stcPLLCfg;
+	Flash_WaitCycle(FlashWaitCycle2);
+    ///<============== 将时钟从RCH4MHz切换至RCH24MHz ==============================    
+    ///< RCH时钟不同频率的切换，需要先将时钟切换到RCL，设置好频率后再切回RCH
+    Sysctrl_SetRCLTrim(SysctrlRclFreq32768);
+    Sysctrl_ClkSourceEnable(SysctrlClkRCL, TRUE);
+    Sysctrl_SysClkSwitch(SysctrlClkRCL);
+	    ///< 加载目标频率的RCH的TRIM值
+    Sysctrl_SetRCHTrim(SysctrlRchFreq4MHz);
+////    ///< 使能RCH（默认打开，此处可不需要再次打开）
+    Sysctrl_ClkSourceEnable(SysctrlClkRCH, TRUE);
+//    ///< 时钟切换到RCH
+    Sysctrl_SysClkSwitch(SysctrlRchFreq4MHz);
+//    ///< 关闭RCL时钟
+   Sysctrl_ClkSourceEnable(SysctrlClkRCL, FALSE);
+    ///< 加载目标频率的RCH的TRIM值
+    //Sysctrl_SetRCHTrim(SysctrlRchFreq24MHz);
+    ///< 使能RCH（默认打开，此处可不需要再次打开）
+    //Sysctrl_ClkSourceEnable(SysctrlClkRCH, TRUE);
+    ///< 时钟切换到RCH
+//    Sysctrl_SysClkSwitch(SysctrlClkXTL);
+    ///< 关闭RCL时钟    
+	//Sysctrl_ClkSourceEnable(SysctrlClkXTH, FALSE);
+//    Sysctrl_ClkSourceEnable(SysctrlClkRCL, FALSE);
+//    Sysctrl_ClkSourceEnable(SysctrlClkRCH, FALSE);
+    Sysctrl_ClkSourceEnable(SysctrlClkPLL, FALSE);
+//Sysctrl_ClkDeInit();
+//Sysctrl_ClkSourceEnable(SysctrlClkXTL, TRUE);
+//Sysctrl_SysClkSwitch(SysctrlClkXTL);
+  Sysctrl_SetPeripheralGate(SysctrlPeripheralFlash,FALSE);//RTC模块时钟打开
+}
+
+//将时钟从XTH32MHz切换至PLL48MHz
+void App_Rch4MHzToPll48MHz (void)
+{
+    stc_sysctrl_pll_cfg_t stcPLLCfg;
+    
+///<======================== 将时钟从XTH32MHz切换至PLL48MHz ==============================    
+    ///< 当前时钟源HCLK大于24M：此处设置FLASH 读等待周期为1 cycle(前面已经配置，此处无需重复配置)
+    //结构体初始化清零
+    DDL_ZERO_STRUCT(stcPLLCfg);
+    
+    Flash_WaitCycle(FlashWaitCycle2);
+    
+    stcPLLCfg.enInFreq    = SysctrlPllInFreq4_6MHz;   //RCH 4MHz
+    stcPLLCfg.enOutFreq   = SysctrlPllOutFreq36_48MHz;  //PLL 输出48MHz
+    stcPLLCfg.enPllClkSrc = SysctrlPllRch;              //输入时钟源选择RCH
+    stcPLLCfg.enPllMul    = SysctrlPllMul12;             //4MHz x 12 = 48MHz
+    Sysctrl_SetPLLFreq(&stcPLLCfg);
+    Sysctrl_SetPLLStableTime(SysctrlPllStableCycle16384);
+    Sysctrl_ClkSourceEnable(SysctrlClkPLL, TRUE);
+    
+    ///< 时钟切换
+    Sysctrl_SysClkSwitch(SysctrlClkPLL);
+       
+    ///< 根据需要选择是否关闭原时钟（此处关闭RCH）
+    Sysctrl_ClkSourceEnable(SysctrlClkRCH, FALSE);      
+}
